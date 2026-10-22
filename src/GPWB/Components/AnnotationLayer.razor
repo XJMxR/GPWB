@@ -1,0 +1,107 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="annotation-layer @AnnotationLayerClass"
+     @onpointerdown="OnBeginAnnotation"
+     @onpointerdown:stopPropagation="true"
+     aria-label="Anotaciones del tablero">
+    <svg class="annotation-drawing-surface" viewBox="0 0 1800 1500" aria-hidden="true">
+        @foreach (var stroke in Strokes)
+        {
+            <path class="annotation-stroke" d="@GetStrokePath(stroke)" stroke="@stroke.Color" @key="stroke.Id" />
+        }
+        @if (ActiveStroke is not null)
+        {
+            <path class="annotation-stroke" d="@GetStrokePath(ActiveStroke)" stroke="@ActiveStroke.Color" />
+        }
+    </svg>
+    @foreach (var note in Notes)
+    {
+        <div class="canvas-annotation-note"
+             style="@GetNoteStyle(note)"
+             @onpointerdown:stopPropagation="true"
+             @key="note.Id">
+            <button type="button" class="annotation-note-delete" @onclick="() => OnRemoveNote(note)"
+                    aria-label="Eliminar nota" title="Eliminar nota">×</button>
+            <textarea id="@GetNoteInputId(note)" value="@note.Text" @oninput="args => OnUpdateNote(note, args)"
+                      placeholder="Escribe una nota..." aria-label="Texto de la nota"></textarea>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required List<CanvasStroke> Strokes { get; set; }
+
+    [Parameter, EditorRequired]
+    public required List<CanvasNote> Notes { get; set; }
+
+    [Parameter]
+    public CanvasStroke? ActiveStroke { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string SelectedTool { get; set; }
+
+    [Parameter]
+    public EventCallback<CanvasStroke> OnStrokeComplete { get; set; }
+
+    [Parameter]
+    public EventCallback<CanvasNote> OnNoteCreated { get; set; }
+
+    [Parameter]
+    public EventCallback<CanvasNote> OnNoteUpdated { get; set; }
+
+    [Parameter]
+    public EventCallback<CanvasNote> OnNoteRemoved { get; set; }
+
+    [Parameter]
+    public EventCallback OnUndo { get; set; }
+
+    private string AnnotationLayerClass => SelectedTool switch
+    {
+        "pen" => "annotation-layer-draw",
+        "text" => "annotation-layer-text",
+        _ => string.Empty
+    };
+
+    private void OnBeginAnnotation(PointerEventArgs args)
+    {
+        // This will be handled by the parent component via JS interop
+    }
+
+    private static string GetStrokePath(CanvasStroke stroke) =>
+        string.Join(" ", stroke.Points.Select((point, index) =>
+            $"{(index == 0 ? "M" : "L")} {point.X.ToString(System.Globalization.CultureInfo.InvariantCulture)} {point.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+
+    private static string GetNoteStyle(CanvasNote note) =>
+        $"left:{note.X.ToString(System.Globalization.CultureInfo.InvariantCulture)}px;top:{note.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}px;";
+
+    private static string GetNoteInputId(CanvasNote note) => $"canvas-note-{note.Id:N}";
+
+    private async Task OnUpdateNote(CanvasNote note, ChangeEventArgs args)
+    {
+        note.Text = args.Value?.ToString() ?? string.Empty;
+        await OnNoteUpdated.InvokeAsync(note);
+    }
+
+    private async Task OnRemoveNote(CanvasNote note)
+    {
+        await OnNoteRemoved.InvokeAsync(note);
+    }
+
+    public sealed class CanvasStroke
+    {
+        public Guid Id { get; init; } = Guid.NewGuid();
+        public string Color { get; init; } = "#5947d5";
+        public List<BoardPoint> Points { get; set; } = [];
+    }
+
+    public sealed class CanvasNote
+    {
+        public Guid Id { get; init; } = Guid.NewGuid();
+        public double X { get; set; }
+        public double Y { get; set; }
+        public string Text { get; set; } = string.Empty;
+    }
+
+    public readonly record struct BoardPoint(double X, double Y);
+}

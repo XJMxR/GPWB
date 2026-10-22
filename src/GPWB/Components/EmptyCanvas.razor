@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="empty-canvas" role="status" aria-live="polite">
+    <div class="empty-illustration" aria-hidden="true">
+        <div class="empty-card empty-card-left"></div>
+        <div class="empty-card empty-card-right"></div>
+        <div class="empty-card empty-card-main">
+            <span></span><span></span><span></span>
+        </div>
+        <div class="empty-connector"></div>
+    </div>
+    <div class="eyebrow">REPOCANVAS</div>
+    <h2>@Title</h2>
+    <p>@Message</p>
+    @if (ShowAction)
+    {
+        <div class="empty-action">
+            <button type="button" class="primary-button" @onclick="OnAction">
+                @ActionText
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Bienvenido a RepoCanvas";
+
+    [Parameter]
+    public string Message { get; set; } = "Introduce un repositorio en formato <strong>usuario/repositorio</strong> para crear un tablero visual con su información pública.";
+
+    [Parameter]
+    public bool ShowAction { get; set; } = false;
+
+    [Parameter]
+    public string ActionText { get; set; } = "Cargar repositorio";
+
+    [Parameter]
+    public EventCallback OnAction { get; set; }
+}

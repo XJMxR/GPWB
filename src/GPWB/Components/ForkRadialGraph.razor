@@ -1,0 +1,75 @@
+<svg class="fork-network @(Expanded ? "fork-network-expanded" : null)"
+     viewBox="@ViewBox"
+     role="img"
+     aria-label="@($"Red radial del repositorio y {Project.Forks.Count} forks públicos recientes")">
+    @for (var index = 0; index < Project.Forks.Count; index++)
+    {
+        var point = ForkPosition(index, Project.Forks.Count);
+        <line class="fork-edge"
+              x1="@SvgNumber(CenterX)" y1="@SvgNumber(CenterY)"
+              x2="@SvgNumber(point.X)" y2="@SvgNumber(point.Y)" />
+    }
+    <circle class="fork-root-halo" cx="@SvgNumber(CenterX)" cy="@SvgNumber(CenterY)" r="@RootHaloRadius" />
+    <circle class="fork-root" cx="@SvgNumber(CenterX)" cy="@SvgNumber(CenterY)" r="@RootRadius" />
+    <text class="fork-root-label" x="@SvgNumber(CenterX)" y="@SvgNumber(CenterY + 4)" text-anchor="middle">ORIGEN</text>
+    <text class="fork-root-name" x="@SvgNumber(CenterX)" y="@SvgNumber(CenterY + RootNameOffset)" text-anchor="middle">
+        @ShortName(Project.Repository.Name, Expanded ? 38 : 23)
+    </text>
+    @for (var index = 0; index < Project.Forks.Count; index++)
+    {
+        var fork = Project.Forks[index];
+        var point = ForkPosition(index, Project.Forks.Count);
+        var labelOffset = Expanded ? 30 : 31;
+        var labelY = point.Y < CenterY ? point.Y - labelOffset : point.Y + labelOffset;
+        <g class="fork-node">
+            <a href="@fork.HtmlUrl" target="_blank" rel="noopener noreferrer"
+               aria-label="@($"Abrir fork {fork.FullName} en GitHub")">
+                <circle class="fork-node-halo" cx="@SvgNumber(point.X)" cy="@SvgNumber(point.Y)" r="@NodeHaloRadius" />
+                <circle class="fork-node-dot" cx="@SvgNumber(point.X)" cy="@SvgNumber(point.Y)" r="@NodeRadius" />
+                <text class="fork-node-initials" x="@SvgNumber(point.X)" y="@SvgNumber(point.Y + 3)"
+                      text-anchor="middle">@ForkInitial(fork)</text>
+                <text class="fork-node-label" x="@SvgNumber(point.X)" y="@SvgNumber(labelY)"
+                      text-anchor="middle">@ShortName(fork.Owner?.Login ?? fork.Name, Expanded ? 22 : 17)</text>
+                <title>@($"{fork.FullName} · ★ {fork.StargazersCount:N0}")</title>
+            </a>
+        </g>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired]
+    public GitHubProjectData Project { get; set; } = default!;
+
+    [Parameter]
+    public bool Expanded { get; set; }
+
+    private string ViewBox => Expanded ? "0 0 1200 700" : "0 0 500 300";
+    private double CenterX => Expanded ? 600 : 250;
+    private double CenterY => Expanded ? 338 : 137;
+    private double OrbitRadius => Expanded ? 230 : 97;
+    private double RootRadius => Expanded ? 31 : 25;
+    private double RootHaloRadius => Expanded ? 41 : 34;
+    private double NodeRadius => Expanded ? 18 : 13;
+    private double NodeHaloRadius => Expanded ? 25 : 19;
+    private double RootNameOffset => Expanded ? 52 : 41;
+
+    private BoardPoint ForkPosition(int index, int count)
+    {
+        var angle = -Math.PI / 2 + (Math.PI * 2 * index / count);
+        return new(CenterX + Math.Cos(angle) * OrbitRadius, CenterY + Math.Sin(angle) * OrbitRadius);
+    }
+
+    private static string SvgNumber(double value) =>
+        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string ShortName(string value, int maximumLength) =>
+        value.Length <= maximumLength ? value : $"{value[..(maximumLength - 1)]}…";
+
+    private static string ForkInitial(GitHubRepository fork)
+    {
+        var name = fork.Owner?.Login ?? fork.Name;
+        return name.Length == 0 ? "?" : name[..1].ToUpperInvariant();
+    }
+
+    private readonly record struct BoardPoint(double X, double Y);
+}

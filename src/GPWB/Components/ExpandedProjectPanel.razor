@@ -1,0 +1,383 @@
+@using System.Text.RegularExpressions
+
+<div class="expanded-panel-overlay"
+     @onpointerdown:stopPropagation="true"
+     @onwheel:stopPropagation="true">
+    <section class="expanded-panel" role="dialog" aria-modal="true" aria-label="@Title">
+        <header class="expanded-panel-header">
+            <div class="expanded-panel-heading">
+                <span class="card-icon @IconClass" aria-hidden="true">@Icon</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">@Overline</span>
+                    <h2 class="expanded-panel-title">@Title</h2>
+                    <span class="expanded-panel-subtitle">@Description</span>
+                </div>
+            </div>
+            <div class="expanded-panel-actions">
+                <a class="expanded-github-link" href="@GitHubUrl" target="_blank" rel="noopener noreferrer">
+                    Ver en GitHub ↗
+                </a>
+                <button class="expanded-close" type="button" @onclick="Close"
+                        aria-label="Cerrar vista ampliada" title="Cerrar (Esc)">×</button>
+            </div>
+        </header>
+
+        <div class="expanded-panel-body">
+            @if (Panel == "issues")
+            {
+                <div class="expanded-section-intro">
+                    <strong>@Project.Issues.Count issues públicos abiertos</strong>
+                    <span>Selecciona un issue para abrir su conversación y participar directamente en GitHub.</span>
+                </div>
+                @if (Project.Issues.Count == 0)
+                {
+                    <p class="expanded-empty">No se encontraron issues abiertos en este repositorio.</p>
+                }
+                else
+                {
+                    <div class="expanded-issues-list">
+                        @foreach (var issue in Project.Issues)
+                        {
+                            <article class="expanded-issue" @key="issue.Number">
+                                <span class="issue-marker expanded-issue-marker" aria-hidden="true">●</span>
+                                <div class="expanded-issue-main">
+                                    <a class="expanded-item-title" href="@issue.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                                        @issue.Title
+                                    </a>
+                                    @if (!string.IsNullOrWhiteSpace(issue.Body))
+                                    {
+                                        <p class="expanded-issue-body">@issue.Body</p>
+                                    }
+                                    <div class="expanded-item-meta">
+                                        <a href="@issue.HtmlUrl" target="_blank" rel="noopener noreferrer">#@issue.Number</a>
+                                        <span>abierto por @(issue.User?.Login ?? "autor desconocido")</span>
+                                        <span>actualizado @CommitAge(issue.UpdatedAt)</span>
+                                        <span>@issue.Comments comentarios</span>
+                                    </div>
+                                    @if (issue.Labels.Count > 0)
+                                    {
+                                        <div class="issue-label-list">
+                                            @foreach (var label in issue.Labels)
+                                            {
+                                                <span class="issue-label" style="@LabelStyle(label.Color)" @key="label.Name">@label.Name</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                <a class="expanded-row-action" href="@issue.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                                    Abrir issue ↗
+                                </a>
+                            </article>
+                        }
+                    </div>
+                    <p class="expanded-data-limit">
+                        Se muestran los issues abiertos devueltos por la primera página de la API (hasta 100). En GitHub puedes consultar y filtrar la lista completa.
+                    </p>
+                }
+            }
+            else if (Panel == "forks")
+            {
+                <div class="expanded-section-intro">
+                    <strong>@Project.Repository.ForksCount.ToString("N0") forks públicos · @Project.Forks.Count mostrados en el tablero</strong>
+                    <span>El diagrama y la lista usan los forks más recientes disponibles en la API pública.</span>
+                </div>
+                @if (Project.Forks.Count == 0)
+                {
+                    <p class="expanded-empty">Este repositorio todavía no tiene forks públicos.</p>
+                }
+                else
+                {
+                    <ForkRadialGraph Project="Project" Expanded="true" />
+                    <div class="expanded-list-heading">
+                        <h3>Forks recientes</h3>
+                        <a href="@GitHubUrl/forks" target="_blank" rel="noopener noreferrer">Ver toda la red de forks ↗</a>
+                    </div>
+                    <div class="expanded-fork-grid">
+                        @foreach (var fork in Project.Forks)
+                        {
+                            <a class="expanded-fork" href="@fork.HtmlUrl" target="_blank" rel="noopener noreferrer" @key="fork.FullName">
+                                <span class="expanded-fork-avatar" aria-hidden="true">@ForkInitial(fork)</span>
+                                <span class="expanded-fork-main">
+                                    <strong>@fork.FullName</strong>
+                                    <small>@(fork.Language ?? "Lenguaje no especificado") · ★ @fork.StargazersCount.ToString("N0")</small>
+                                </span>
+                                <span class="expanded-fork-date">actualizado @CommitAge(fork.PushedAt ?? fork.UpdatedAt)</span>
+                                <span class="expanded-row-action">Abrir ↗</span>
+                            </a>
+                        }
+                    </div>
+                    <p class="expanded-data-limit">
+                        La API devuelve hasta 100 forks por solicitud; el lienzo muestra los @Project.Forks.Count más recientes de esa página. La lista completa está en GitHub.
+                    </p>
+                }
+            }
+            else if (Panel == "activity")
+            {
+                <div class="expanded-section-intro">
+                    <strong>Árbol de actividad · @Project.Commits.Count commits recientes en la rama predeterminada</strong>
+                    <span>Las líneas verticales muestran el orden de los commits; los enlaces de padre reflejan las relaciones de GitHub cuando están en los datos cargados.</span>
+                </div>
+                <div class="activity-tree-root">
+                    <span class="activity-tree-root-icon">GH</span>
+                    <span><strong>@Project.Repository.FullName</strong><small>raíz del repositorio</small></span>
+                    <a href="@($"{GitHubUrl}/commits/{Uri.EscapeDataString(Project.Repository.DefaultBranch ?? "HEAD")}")"
+                       target="_blank" rel="noopener noreferrer">Historial completo ↗</a>
+                </div>
+
+                @if (Project.Commits.Count > 0)
+                {
+                    <section class="activity-tree-branch">
+                        <div class="activity-tree-branch-heading">
+                            <span class="branch-symbol">⑂</span>
+                            <a href="@BranchUrl(Project.Repository.DefaultBranch ?? "HEAD")" target="_blank" rel="noopener noreferrer">
+                                @Project.Repository.DefaultBranch <span class="default-branch-pill">RAMA PREDETERMINADA</span>
+                            </a>
+                            <span class="card-count">@Project.Commits.Count commits</span>
+                        </div>
+                        <ol class="activity-tree-commits">
+                            @foreach (var commit in Project.Commits)
+                            {
+                                @CommitTreeItem(commit)
+                            }
+                        </ol>
+                    </section>
+                }
+                else
+                {
+                    <p class="expanded-empty">No hay commits recientes disponibles.</p>
+                }
+
+                <div class="expanded-list-heading">
+                    <h3>Actividad en otras ramas</h3>
+                    <a href="@($"{GitHubUrl}/branches")" target="_blank" rel="noopener noreferrer">Explorar ramas ↗</a>
+                </div>
+                @foreach (var branch in OtherBranches)
+                {
+                    <details class="activity-tree-branch activity-tree-secondary" @key="branch.Name">
+                        <summary class="activity-tree-branch-heading">
+                            <span class="branch-symbol">⑂</span>
+                            <span class="activity-branch-summary">
+                                <a href="@BranchUrl(branch.Name)" target="_blank" rel="noopener noreferrer">@branch.Name</a>
+                                @if (branch.Protected)
+                                {
+                                    <span class="protected-branch">PROTEGIDA</span>
+                                }
+                            </span>
+                            <span class="card-count">@branch.Commits.Count commits</span>
+                        </summary>
+                        <ol class="activity-tree-commits">
+                            @foreach (var commit in branch.Commits)
+                            {
+                                @CommitTreeItem(commit)
+                            }
+                        </ol>
+                    </details>
+                }
+                <p class="expanded-data-limit">
+                    Se incluyen hasta @Project.Commits.Count commits de la rama predeterminada y @OtherBranches.Count() ramas adicionales con hasta 10 commits por rama. Usa GitHub para explorar el historial completo y las ramas que no aparecen aquí.
+                </p>
+            }
+            else if (Panel == "branches")
+            {
+                <div class="expanded-section-intro">
+                    <strong>@Project.Branches.Count ramas con actividad cargada</strong>
+                    <span>Abre una rama para revisar commits y padres. Los enlaces permiten ver el código, comparar cambios o abrir una revisión de la rama en GitHub.</span>
+                </div>
+                <div class="expanded-branches-list">
+                    @foreach (var branch in Project.Branches)
+                    {
+                        <details class="expanded-branch" @key="branch.Name">
+                            <summary class="expanded-branch-summary">
+                                <span class="branch-symbol">⑂</span>
+                                <span class="expanded-branch-name">
+                                    @branch.Name
+                                    @if (branch.Name.Equals(Project.Repository.DefaultBranch, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="default-branch-pill">RAMA PREDETERMINADA</span>
+                                    }
+                                    @if (branch.Protected)
+                                    {
+                                        <span class="protected-branch">PROTEGIDA</span>
+                                    }
+                                </span>
+                                <span class="card-count">@branch.Commits.Count commits</span>
+                                <span class="branch-summary-actions">
+                                    <a href="@BranchUrl(branch.Name)" target="_blank" rel="noopener noreferrer">Código ↗</a>
+                                    <a href="@CompareBranchUrl(branch.Name)" target="_blank" rel="noopener noreferrer">Comparar ↗</a>
+                                </span>
+                            </summary>
+                            @if (branch.Commits.Count == 0)
+                            {
+                                <p class="expanded-empty branch-expanded-empty">No hay commits recientes disponibles para esta rama.</p>
+                            }
+                            else
+                            {
+                                <ol class="activity-tree-commits expanded-branch-commits">
+                                    @foreach (var commit in branch.Commits)
+                                    {
+                                        @CommitTreeItem(commit)
+                                    }
+                                </ol>
+                            }
+                        </details>
+                    }
+                </div>
+                <p class="expanded-data-limit">
+                    La API consulta la primera página (hasta 100 ramas); el tablero compara hasta seis y muestra hasta 10 commits por rama. GitHub conserva el historial y las ramas completos.
+                </p>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public GitHubProjectData Project { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string Panel { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private IEnumerable<GitHubBranchActivity> OtherBranches =>
+        Project.Branches.Where(branch =>
+            !branch.Name.Equals(Project.Repository.DefaultBranch, StringComparison.OrdinalIgnoreCase));
+
+    private string Title => Panel switch
+    {
+        "issues" => "Issues recientes",
+        "forks" => "Forks relacionados",
+        "activity" => "Árbol de actividad reciente",
+        "branches" => "Actividad por rama",
+        _ => "Detalles del proyecto"
+    };
+
+    private string Overline => Panel switch
+    {
+        "issues" => "SEGUIMIENTO DEL PROYECTO",
+        "forks" => "RED PÚBLICA DEL REPOSITORIO",
+        "activity" => "HISTORIAL RECIENTE DE GIT",
+        "branches" => "RAMAS PÚBLICAS",
+        _ => "REPOCANVAS"
+    };
+
+    private string IconClass => Panel switch
+    {
+        "issues" => "issues-icon",
+        "forks" => "forks-icon",
+        "activity" => "activity-icon",
+        "branches" => "branches-icon",
+        _ => string.Empty
+    };
+
+    private string Icon => Panel switch
+    {
+        "issues" => "◎",
+        "forks" => "⑂",
+        "activity" => "↻",
+        "branches" => "⑂",
+        _ => "GH"
+    };
+
+    private string Description => Panel switch
+    {
+        "issues" => "Issues públicos abiertos con etiquetas, autores y enlaces para continuar la conversación.",
+        "forks" => "Relación radial y detalle de forks públicos recientes del proyecto.",
+        "activity" => "Recorrido cronológico enlazado por ramas, commits y relaciones de parentesco.",
+        "branches" => "Ramas del proyecto, commits recientes y accesos para explorar su código.",
+        _ => Project.Repository.FullName
+    };
+
+    private string GitHubUrl => Project.Repository.HtmlUrl;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private string BranchUrl(string branch) =>
+        $"{GitHubUrl}/tree/{Uri.EscapeDataString(branch)}";
+
+    private string CompareBranchUrl(string branch) =>
+        $"{GitHubUrl}/compare/{Uri.EscapeDataString(Project.Repository.DefaultBranch ?? "HEAD")}...{Uri.EscapeDataString(branch)}";
+
+    private static string ForkInitial(GitHubRepository fork)
+    {
+        var name = fork.Owner?.Login ?? fork.Name;
+        return name.Length == 0 ? "?" : name[..1].ToUpperInvariant();
+    }
+
+    private static string CommitAge(DateTimeOffset? date)
+    {
+        if (date is null)
+        {
+            return "fecha no disponible";
+        }
+
+        var elapsed = DateTimeOffset.UtcNow - date.Value;
+        return elapsed.TotalDays switch
+        {
+            < 1 => "hoy",
+            < 30 => $"hace {(int)elapsed.TotalDays} d",
+            < 365 => $"hace {(int)(elapsed.TotalDays / 30)} mes",
+            _ => $"hace {(int)(elapsed.TotalDays / 365)} a"
+        };
+    }
+
+    private static string LabelStyle(string color) =>
+        Regex.IsMatch(color, "^[0-9A-Fa-f]{6}$", RegexOptions.CultureInvariant)
+            ? $"--issue-label-color: #{color};"
+            : string.Empty;
+
+    private RenderFragment CommitTreeItem(GitHubCommit commit) => builder =>
+    {
+        var sequence = 0;
+        var message = commit.Commit.Message.Split('\n', 2)[0];
+        builder.OpenElement(sequence++, "li");
+        builder.AddAttribute(sequence++, "class", "activity-tree-commit");
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "activity-tree-node");
+        builder.CloseElement();
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "activity-tree-commit-content");
+        builder.OpenElement(sequence++, "a");
+        builder.AddAttribute(sequence++, "class", "activity-commit-message");
+        builder.AddAttribute(sequence++, "href", commit.HtmlUrl);
+        builder.AddAttribute(sequence++, "target", "_blank");
+        builder.AddAttribute(sequence++, "rel", "noopener noreferrer");
+        builder.AddContent(sequence++, message);
+        builder.CloseElement();
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "activity-commit-meta");
+        builder.AddContent(sequence++, commit.Commit.Author?.Name ?? "Autor desconocido");
+        builder.AddContent(sequence++, " · ");
+        builder.AddContent(sequence++, CommitAge(commit.Commit.Author?.Date));
+        builder.AddContent(sequence++, " · ");
+        builder.OpenElement(sequence++, "code");
+        builder.AddContent(sequence++, commit.Sha[..Math.Min(7, commit.Sha.Length)]);
+        builder.CloseElement();
+        builder.CloseElement();
+        if (commit.Parents.Count > 0)
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "activity-commit-parents");
+            builder.AddContent(sequence++, "padre");
+            if (commit.Parents.Count > 1)
+            {
+                builder.AddContent(sequence++, "s");
+            }
+            builder.AddContent(sequence++, ": ");
+            foreach (var parent in commit.Parents)
+            {
+                builder.OpenElement(sequence++, "a");
+                builder.AddAttribute(sequence++, "href", parent.HtmlUrl);
+                builder.AddAttribute(sequence++, "target", "_blank");
+                builder.AddAttribute(sequence++, "rel", "noopener noreferrer");
+                builder.AddContent(sequence++, parent.Sha[..Math.Min(7, parent.Sha.Length)]);
+                builder.CloseElement();
+                builder.AddContent(sequence++, " ");
+            }
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+}

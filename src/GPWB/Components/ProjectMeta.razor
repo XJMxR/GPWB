@@ -1,0 +1,40 @@
+@using GPWB.Models
+
+<div class="project-meta">
+    <span>
+        <i class="language-swatch" style="background: @LanguageColor"></i>
+        @(Repository.Language ?? "Varios lenguajes")
+    </span>
+    <span class="default-branch">⑂ @(Repository.DefaultBranch ?? "rama principal")</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required GitHubRepository Repository { get; set; }
+
+    private string LanguageColor => GetLanguageColor(Repository.Language);
+
+    private static string GetLanguageColor(string? language) => language?.ToLowerInvariant() switch
+    {
+        "c#" => "#178600",
+        "typescript" => "#3178c6",
+        "javascript" => "#f1e05a",
+        "python" => "#3572a5",
+        "java" => "#b07219",
+        "go" => "#00add8",
+        "rust" => "#dea584",
+        "cpp" => "#f34b7d",
+        "c" => "#555555",
+        "php" => "#4f5d95",
+        "ruby" => "#701516",
+        "swift" => "#ffac45",
+        "kotlin" => "#f18e33",
+        "dart" => "#00b4ab",
+        "html" => "#e34c26",
+        "css" => "#1572b6",
+        "scss" => "#cf649a",
+        "vue" => "#42b883",
+        "svelte" => "#ff3e00",
+        _ => "#6b62d9"
+    };
+}

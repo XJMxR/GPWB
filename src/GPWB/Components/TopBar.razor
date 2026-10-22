@@ -1,0 +1,89 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="topbar">
+    <div class="brand">
+        <span class="brand-mark">GH</span>
+        <span>Repo<span class="brand-accent">Canvas</span></span>
+    </div>
+    <div class="topbar-divider" aria-hidden="true"></div>
+    <div class="document-title">
+        <span class="document-kicker">TABLERO</span>
+        <strong>@DocumentTitle</strong>
+    </div>
+    <div class="topbar-actions">
+        <a class="github-link" href="https://github.com/XJMxR/GPWB" target="_blank" rel="noopener noreferrer">
+            Ver en GitHub
+        </a>
+        @if (ShowSaveIndicator)
+        {
+            <div class="save-indicator" aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span>@SaveStatus</span>
+            </div>
+        }
+        <div class="api-usage" aria-label="Uso de la API de GitHub">
+            <span class="api-usage-dot @(IsAuthenticated ? "connected" : "")" aria-hidden="true"></span>
+            <span>@ApiUsageText</span>
+            <small>@ApiUsageDetail</small>
+        </div>
+        <ConnectionDialog IsOpen="@ShowConnectionDialog" 
+                          IsOpenChanged="@OnConnectionDialogChanged" 
+                          OnConnect="@OnConnectToken"
+                          IsConnecting="@IsConnecting" />
+        @if (IsAuthenticated)
+        {
+            <button type="button" class="connect-github-button connected" @onclick="Disconnect" aria-label="Desconectar de GitHub">
+                @Login · Desconectar
+            </button>
+        }
+        else
+        {
+            <button type="button" class="connect-github-button" @onclick="() => OnConnectionDialogChanged.InvokeAsync(true)" aria-label="Conectar cuenta de GitHub">
+                Conectar GitHub
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string DocumentTitle { get; set; } = "RepoCanvas";
+
+    [Parameter]
+    public bool ShowSaveIndicator { get; set; } = false;
+
+    [Parameter]
+    public string SaveStatus { get; set; } = "Guardado";
+
+    [Parameter]
+    public string ApiUsageText { get; set; } = "API anónima";
+
+    [Parameter]
+    public string ApiUsageDetail { get; set; } = "60 req/h";
+
+    [Parameter]
+    public bool IsAuthenticated { get; set; } = false;
+
+    [Parameter]
+    public string Login { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool ShowConnectionDialog { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<bool> OnConnectionDialogChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnConnectToken { get; set; }
+
+    [Parameter]
+    public EventCallback OnDisconnect { get; set; }
+
+    [Parameter]
+    public bool IsConnecting { get; set; } = false;
+
+    private async Task Disconnect()
+    {
+        await OnDisconnect.InvokeAsync();
+    }
+}

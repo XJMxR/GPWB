@@ -1,0 +1,29 @@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+
+<div class="virtualized-list" role="list" aria-label="@AriaLabel">
+    <Virtualize Items="@Items" Context="item" ItemSize="@ItemSize" OverscanCount="@OverscanCount">
+        <ItemContent>
+            @ChildContent(item)
+        </ItemContent>
+        <Placeholder>
+            <div class="virtualized-placeholder" style="height: @($"{ItemSize}px")" aria-hidden="true"></div>
+        </Placeholder>
+    </Virtualize>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required IEnumerable<TItem> Items { get; set; }
+
+    [Parameter, EditorRequired]
+    public required RenderFragment<TItem> ChildContent { get; set; }
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Lista virtualizada";
+
+    [Parameter]
+    public float ItemSize { get; set; } = 50f;
+
+    [Parameter]
+    public int OverscanCount { get; set; } = 3;
+}

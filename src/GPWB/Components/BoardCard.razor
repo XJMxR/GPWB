@@ -1,0 +1,111 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="board-card @CardClass" 
+     style="@Style" 
+     @onpointerdown="@(args => OnDragStart(args, NodeId))"
+     @onpointerdown:stopPropagation="true"
+     role="article"
+     aria-labelledby="@($"{NodeId}-title")"
+     tabindex="0"
+     @onkeydown="HandleKeyDown">
+    <div class="card-heading">
+        <span class="card-icon @IconClass" aria-hidden="true">@Icon</span>
+        <div class="card-heading-text">
+            <span class="card-overline">@Overline</span>
+            <h2 id="@($"{NodeId}-title")" class="card-title">@Title</h2>
+        </div>
+        @if (ShowExpandButton)
+        {
+            <button type="button" 
+                    class="card-expand" 
+                    @onclick="@(args => { args.StopPropagation(); OnExpand?.Invoke(); })"
+                    @onpointerdown:stopPropagation="true" 
+                    aria-label="@ExpandAriaLabel"
+                    title="@ExpandTitle">⤢</button>
+        }
+        @if (Count.HasValue)
+        {
+            <span class="card-count">@Count.Value</span>
+        }
+    </div>
+
+    @if (IsEmpty)
+    {
+        <p class="card-empty">@EmptyMessage</p>
+    }
+    else
+    {
+        @Content
+    }
+
+    @if (!string.IsNullOrEmpty(FooterContent))
+    {
+        <div class="card-footer">
+            @FooterContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string NodeId { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Overline { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Icon { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string IconClass { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Style { get; set; }
+
+    [Parameter]
+    public string CardClass { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? Content { get; set; }
+
+    [Parameter]
+    public string? FooterContent { get; set; }
+
+    [Parameter]
+    public int? Count { get; set; }
+
+    [Parameter]
+    public bool ShowExpandButton { get; set; } = false;
+
+    [Parameter]
+    public string ExpandAriaLabel { get; set; } = "Ampliar panel";
+
+    [Parameter]
+    public string ExpandTitle { get; set; } = "Ampliar";
+
+    [Parameter]
+    public EventCallback OnExpand { get; set; }
+
+    [Parameter]
+    public bool IsEmpty { get; set; } = false;
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = "No hay datos disponibles.";
+
+    [Parameter]
+    public EventCallback<PointerEventArgs> OnDragStart { get; set; }
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" || args.Key == " ")
+        {
+            if (ShowExpandButton && OnExpand.HasDelegate)
+            {
+                OnExpand.InvokeAsync();
+            }
+        }
+    }
+}

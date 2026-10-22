@@ -1,0 +1,9 @@
+<div class="loading-canvas" role="status" aria-live="polite" aria-label="Cargando repositorio">
+    <div class="large-spinner" aria-hidden="true"></div>
+    <strong>@Message</strong>
+</div>
+
+@code {
+    [Parameter]
+    public string Message { get; set; } = "Cargando repositorio...";
+}

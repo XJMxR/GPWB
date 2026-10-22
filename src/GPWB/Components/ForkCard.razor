@@ -1,0 +1,35 @@
+@using GPWB.Models
+
+<a class="expanded-fork" href="@Fork.HtmlUrl" target="_blank" rel="noopener noreferrer" @key="Fork.FullName">
+    <span class="expanded-fork-avatar" aria-hidden="true">@GetForkInitial(Fork)</span>
+    <span class="expanded-fork-main">
+        <strong>@Fork.FullName</strong>
+        <small>@(Fork.Language ?? "Lenguaje no especificado") · ★ @Fork.StargazersCount.ToString("N0")</small>
+    </span>
+    <span class="expanded-fork-date">actualizado @GetCommitAge(Fork.PushedAt ?? Fork.UpdatedAt)</span>
+    <span class="expanded-row-action">Abrir ↗</span>
+</a>
+
+@code {
+    [Parameter, EditorRequired]
+    public required GitHubRepository Fork { get; set; }
+
+    private static string GetCommitAge(DateTimeOffset? date)
+    {
+        if (date is null) return "fecha no disponible";
+        var elapsed = DateTimeOffset.UtcNow - date.Value;
+        return elapsed.TotalDays switch
+        {
+            < 1 => "hoy",
+            < 30 => $"hace {(int)elapsed.TotalDays} d",
+            < 365 => $"hace {(int)(elapsed.TotalDays / 30)} mes",
+            _ => $"hace {(int)(elapsed.TotalDays / 365)} a"
+        };
+    }
+
+    private static string GetForkInitial(GitHubRepository fork)
+    {
+        var name = fork.Owner?.Login ?? fork.Name;
+        return name.Length == 0 ? "?" : name[..1].ToUpperInvariant();
+    }
+}

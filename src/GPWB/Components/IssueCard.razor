@@ -1,0 +1,55 @@
+@using GPWB.Models
+
+<div class="expanded-issue" @key="Issue.Number">
+    <span class="issue-marker expanded-issue-marker" aria-hidden="true">●</span>
+    <div class="expanded-issue-main">
+        <a class="expanded-item-title" href="@Issue.HtmlUrl" target="_blank" rel="noopener noreferrer">
+            @Issue.Title
+        </a>
+        @if (!string.IsNullOrWhiteSpace(Issue.Body))
+        {
+            <p class="expanded-issue-body">@Issue.Body</p>
+        }
+        <div class="expanded-item-meta">
+            <a href="@Issue.HtmlUrl" target="_blank" rel="noopener noreferrer">#@Issue.Number</a>
+            <span>abierto por @(Issue.User?.Login ?? "autor desconocido")</span>
+            <span>actualizado @GetCommitAge(Issue.UpdatedAt)</span>
+            <span>@Issue.Comments comentarios</span>
+        </div>
+        @if (Issue.Labels.Count > 0)
+        {
+            <div class="issue-label-list">
+                @foreach (var label in Issue.Labels)
+                {
+                    <span class="issue-label" style="@GetLabelStyle(label.Color)" @key="label.Name">@label.Name</span>
+                }
+            </div>
+        }
+    </div>
+    <a class="expanded-row-action" href="@Issue.HtmlUrl" target="_blank" rel="noopener noreferrer">
+        Abrir issue ↗
+    </a>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required GitHubIssue Issue { get; set; }
+
+    private static string GetCommitAge(DateTimeOffset? date)
+    {
+        if (date is null) return "fecha no disponible";
+        var elapsed = DateTimeOffset.UtcNow - date.Value;
+        return elapsed.TotalDays switch
+        {
+            < 1 => "hoy",
+            < 30 => $"hace {(int)elapsed.TotalDays} d",
+            < 365 => $"hace {(int)(elapsed.TotalDays / 30)} mes",
+            _ => $"hace {(int)(elapsed.TotalDays / 365)} a"
+        };
+    }
+
+    private static string GetLabelStyle(string color) =>
+        System.Text.RegularExpressions.Regex.IsMatch(color, "^[0-9A-Fa-f]{6}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+            ? $"--issue-label-color: #{color}"
+            : string.Empty;
+}

@@ -1,20 +1,44 @@
+@inject IJSRuntime JS
+
 <div class="canvas-viewport"
+     @ref="_viewport"
      @onpointerdown="BeginPan"
      @onpointermove="MovePointer"
-     @onpointerup="EndPointer"
-     @onpointercancel="EndPointer"
-     @onpointerleave="EndPointer"
+     @onpointerup="EndPointerAsync"
+     @onpointercancel="EndPointerAsync"
      @onwheel="HandleWheel"
      @onwheel:preventDefault="true">
+    <div class="board-annotation-tools" @onpointerdown:stopPropagation="true"
+         aria-label="Herramientas para anotar el tablero">
+        <button type="button" class="annotation-tool @ToolClass(SelectTool)" @onclick="() => SetTool(SelectTool)"
+                title="Mover tarjetas y lienzo" aria-label="Seleccionar y mover">↖</button>
+        <button type="button" class="annotation-tool @ToolClass(PenTool)" @onclick="() => SetTool(PenTool)"
+                title="Dibujar en el tablero" aria-label="Dibujar">✎</button>
+        <button type="button" class="annotation-tool @ToolClass(TextTool)" @onclick="() => SetTool(TextTool)"
+                title="Añadir una nota de texto" aria-label="Añadir texto">T</button>
+        <span class="annotation-tool-divider"></span>
+        <button type="button" class="annotation-tool" @onclick="UndoAnnotationAsync"
+                disabled="@(_strokes.Count == 0 && _notes.Count == 0)" title="Deshacer última anotación"
+                aria-label="Deshacer última anotación">↶</button>
+        <span class="annotation-tool-label">@ToolLabel</span>
+    </div>
+    @if (_annotationError is not null)
+    {
+        <div class="annotation-storage-error" role="status">@_annotationError</div>
+    }
     <div class="canvas-world" style="@WorldStyle">
-        <svg class="canvas-connectors" viewBox="0 0 1600 1000" aria-hidden="true">
+        <svg class="canvas-connectors" viewBox="0 0 1800 1500" aria-hidden="true">
             <path d="@ProjectToLanguagesPath" />
             <path d="@ProjectToIssuesPath" />
             <path d="@ProjectToActivityPath" />
+            <path d="@ProjectToForksPath" />
+            <path d="@ProjectToBranchesPath" />
             <circle class="connector-dot" cx="@CenterX(ProjectNode)" cy="@BottomY(ProjectNode)" r="4" />
             <circle class="connector-dot" cx="@CenterX(LanguagesNode)" cy="@TopY(LanguagesNode)" r="4" />
             <circle class="connector-dot" cx="@CenterX(IssuesNode)" cy="@TopY(IssuesNode)" r="4" />
             <circle class="connector-dot" cx="@CenterX(ActivityNode)" cy="@TopY(ActivityNode)" r="4" />
+            <circle class="connector-dot" cx="@CenterX(ForksNode)" cy="@TopY(ForksNode)" r="4" />
+            <circle class="connector-dot" cx="@CenterX(BranchesNode)" cy="@TopY(BranchesNode)" r="4" />
         </svg>
 
         <article class="board-card project-card"
@@ -86,6 +110,9 @@
                     <h2 class="card-title">Issues recientes</h2>
                 </div>
                 <span class="card-count">@Project.Issues.Count</span>
+                <button class="card-expand" type="button" @onclick="() => ExpandPanel(IssuesNode)"
+                        @onpointerdown:stopPropagation="true" aria-label="Ampliar issues recientes"
+                        title="Ampliar y consultar issues">⤢</button>
             </div>
             @if (Project.Issues.Count == 0)
             {
@@ -94,7 +121,7 @@
             else
             {
                 <ul class="item-list">
-                    @foreach (var issue in Project.Issues)
+                    @foreach (var issue in Project.Issues.Take(5))
                     {
                         <li @key="issue.Number">
                             <span class="issue-marker" aria-hidden="true">●</span>
@@ -117,7 +144,10 @@
                     <span class="card-overline">DESARROLLO</span>
                     <h2 class="card-title">Actividad reciente</h2>
                 </div>
-                <span class="card-count">@Project.Commits.Count</span>
+                <span class="card-count">@UniqueCommitCount commits</span>
+                <button class="card-expand" type="button" @onclick="() => ExpandPanel(ActivityNode)"
+                        @onpointerdown:stopPropagation="true" aria-label="Ampliar árbol de actividad"
+                        title="Ampliar árbol de actividad">⤢</button>
             </div>
             @if (Project.Commits.Count == 0)
             {
@@ -125,25 +155,183 @@
             }
             else
             {
-                <ul class="item-list commit-list">
-                    @foreach (var commit in Project.Commits)
+                <div class="activity-tree-preview">
+                    <div class="activity-tree-preview-root">
+                        <span class="branch-symbol">⑂</span>
+                        <strong>@Project.Repository.DefaultBranch</strong>
+                        <small>rama predeterminada</small>
+                    </div>
+                    <ol class="activity-tree-commits activity-tree-preview-commits">
+                    @foreach (var commit in Project.Commits.Take(4))
                     {
                         var message = commit.Commit.Message.Split('\n', 2)[0];
-                        <li @key="commit.Sha">
-                            <span class="commit-marker" aria-hidden="true"></span>
+                        <li class="activity-tree-commit" @key="commit.Sha">
+                            <span class="activity-tree-node" aria-hidden="true"></span>
                             <a href="@($"https://github.com/{Project.Repository.FullName}/commit/{commit.Sha}")"
                                target="_blank" rel="noopener noreferrer">
-                                <span>@(message.Length > 72 ? $"{message[..69]}…" : message)</span>
-                                <small>@(commit.Commit.Author?.Name ?? commit.Sha[..7])</small>
+                                <span class="activity-commit-message">@(message.Length > 55 ? $"{message[..54]}…" : message)</span>
+                                <small>@(commit.Commit.Author?.Name ?? commit.Sha[..7]) · @CommitAge(commit.Commit.Author?.Date)</small>
                             </a>
                         </li>
                     }
-                </ul>
+                    </ol>
+                    <a class="tree-preview-link" href="@($"{Project.Repository.HtmlUrl}/commits/{Uri.EscapeDataString(Project.Repository.DefaultBranch ?? "HEAD")}")"
+                       target="_blank" rel="noopener noreferrer">Ver el historial completo ↗</a>
+                </div>
             }
         </article>
+
+        <article class="board-card forks-card"
+                 style="@ForksCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, ForksNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon forks-icon" aria-hidden="true">⑂</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">RED DEL PROYECTO</span>
+                    <h2 class="card-title">Forks relacionados</h2>
+                </div>
+                <span class="card-count">@Project.Repository.ForksCount.ToString("N0")</span>
+                <button class="card-expand" type="button" @onclick="() => ExpandPanel(ForksNode)"
+                        @onpointerdown:stopPropagation="true" aria-label="Ampliar forks relacionados"
+                        title="Ampliar red de forks">⤢</button>
+            </div>
+
+            @if (Project.Forks.Count == 0)
+            {
+                <p class="card-empty">Este repositorio todavía no tiene forks públicos.</p>
+            }
+            else
+            {
+                <ForkRadialGraph Project="Project" />
+                <div class="forks-caption">
+                    <span><i class="fork-caption-dot"></i>@Project.Forks.Count forks recientes</span>
+                    <a href="@($"{Project.Repository.HtmlUrl}/forks")" target="_blank" rel="noopener noreferrer">
+                        Ver los @Project.Repository.ForksCount.ToString("N0") en GitHub ↗
+                    </a>
+                </div>
+            }
+        </article>
+
+        <article class="board-card branches-card"
+                 style="@BranchesCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, BranchesNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon branches-icon" aria-hidden="true">⑂</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">DESARROLLO DEL CÓDIGO</span>
+                    <h2 class="card-title">Actividad por rama</h2>
+                </div>
+                <span class="card-count">@BranchCountLabel</span>
+                <button class="card-expand" type="button" @onclick="() => ExpandPanel(BranchesNode)"
+                        @onpointerdown:stopPropagation="true" aria-label="Ampliar actividad por rama"
+                        title="Ampliar actividad por rama">⤢</button>
+            </div>
+            @if (Project.Branches.Count == 0)
+            {
+                <p class="card-empty">No se encontraron ramas públicas con actividad reciente.</p>
+            }
+            else
+            {
+                <div class="branch-activity-grid">
+                    @foreach (var branch in Project.Branches.Take(2))
+                    {
+                        <section class="branch-entry" @key="branch.Name">
+                            <div class="branch-entry-heading">
+                                <a href="@BranchUrl(branch.Name)" target="_blank" rel="noopener noreferrer"
+                                   title="@branch.Name" class="branch-name">
+                                    <span class="branch-symbol" aria-hidden="true">⑂</span>
+                                    <span>@ShortName(branch.Name, 28)</span>
+                                </a>
+                                @if (branch.Protected)
+                                {
+                                    <span class="protected-branch" title="Rama protegida">PROTEGIDA</span>
+                                }
+                            </div>
+                            @if (branch.Commits.Count == 0)
+                            {
+                                <p class="branch-empty">Sin commits recientes.</p>
+                            }
+                            else
+                            {
+                                <ol class="branch-commit-list">
+                                    @foreach (var commit in branch.Commits.Take(3))
+                                    {
+                                        var message = commit.Commit.Message.Split('\n', 2)[0];
+                                        <li @key="commit.Sha">
+                                            <span class="branch-commit-dot"></span>
+                                            <a href="@($"https://github.com/{Project.Repository.FullName}/commit/{commit.Sha}")"
+                                               target="_blank" rel="noopener noreferrer">
+                                                <span class="branch-commit-message">@ShortName(message, 62)</span>
+                                                <small>
+                                                    @(commit.Commit.Author?.Name ?? "Autor desconocido")
+                                                    · @CommitAge(commit.Commit.Author?.Date)
+                                                    · <code>@ShortName(commit.Sha, 7)</code>
+                                                </small>
+                                            </a>
+                                        </li>
+                                    }
+                                </ol>
+                            }
+                        </section>
+                    }
+                </div>
+                <div class="branches-caption">
+                    Vista previa: dos ramas y tres commits por rama.
+                    @if (Project.BranchesReturned >= 100)
+                    {
+                        <span> GitHub devolvió las primeras 100 ramas.</span>
+                    }
+                    <button type="button" class="branches-expand-link" @onclick="() => ExpandPanel(BranchesNode)"
+                            @onpointerdown:stopPropagation="true">
+                        @if (Project.Branches.Count > 2)
+                        {
+                            <span>Ver las @Math.Max(0, Project.Branches.Count - 2) restantes y su actividad ↗</span>
+                        }
+                        else
+                        {
+                            <span>Abrir la vista detallada de ramas ↗</span>
+                        }
+                    </button>
+                </div>
+            }
+        </article>
+
+        <div class="annotation-layer @AnnotationLayerClass"
+             @onpointerdown="BeginAnnotation"
+             @onpointerdown:stopPropagation="true"
+             aria-label="Anotaciones del tablero">
+            <svg class="annotation-drawing-surface" viewBox="0 0 1800 1500" aria-hidden="true">
+                @foreach (var stroke in _strokes)
+                {
+                    <path class="annotation-stroke" d="@StrokePath(stroke)" stroke="@stroke.Color" @key="stroke.Id" />
+                }
+                @if (_activeStroke is not null)
+                {
+                    <path class="annotation-stroke" d="@StrokePath(_activeStroke)" stroke="@_activeStroke.Color" />
+                }
+            </svg>
+            @foreach (var note in _notes)
+            {
+                <div class="canvas-annotation-note"
+                     style="@NoteStyle(note)"
+                     @onpointerdown:stopPropagation="true"
+                     @key="note.Id">
+                    <button type="button" class="annotation-note-delete" @onclick="() => RemoveNoteAsync(note)"
+                            aria-label="Eliminar nota" title="Eliminar nota">×</button>
+                    <textarea id="@NoteInputId(note)" value="@note.Text" @oninput="args => UpdateNoteAsync(note, args)"
+                              placeholder="Escribe una nota..." aria-label="Texto de la nota"></textarea>
+                </div>
+            }
+        </div>
     </div>
 
     <div class="canvas-attribution">Información pública de GitHub · Arrastra el fondo para mover el lienzo</div>
+    @if (_expandedPanel is not null)
+    {
+        <ExpandedProjectPanel Project="Project" Panel="@_expandedPanel" OnClose="CloseExpandedPanel" />
+    }
 </div>
 
 @code {
@@ -151,6 +339,12 @@
     private const string LanguagesNode = "languages";
     private const string IssuesNode = "issues";
     private const string ActivityNode = "activity";
+    private const string ForksNode = "forks";
+    private const string BranchesNode = "branches";
+    private const string SelectTool = "select";
+    private const string PenTool = "pen";
+    private const string TextTool = "text";
+    private const string AnnotationStoragePrefix = "repocanvas.annotations.v1:";
 
     [Parameter, EditorRequired]
     public GitHubProjectData Project { get; set; } = default!;
@@ -163,14 +357,25 @@
 
     private readonly Dictionary<string, BoardPoint> _positions = new()
     {
-        ["project"] = new(535, 90),
-        ["languages"] = new(120, 480),
-        ["issues"] = new(575, 520),
-        ["activity"] = new(1060, 450)
+        ["project"] = new(320, 40),
+        ["languages"] = new(70, 500),
+        ["issues"] = new(400, 520),
+        ["activity"] = new(875, 500),
+        ["forks"] = new(741, 35),
+        ["branches"] = new(250, 900)
     };
 
+    private readonly List<CanvasStroke> _strokes = [];
+    private readonly List<CanvasNote> _notes = [];
+    private ElementReference _viewport;
     private string? _draggingNode;
     private bool _isPanning;
+    private string? _expandedPanel;
+    private string _selectedTool = SelectTool;
+    private string? _activeAnnotationKey;
+    private string? _annotationError;
+    private string? _noteToFocusId;
+    private CanvasStroke? _activeStroke;
     private double _lastPointerX;
     private double _lastPointerY;
     private double _panX;
@@ -181,9 +386,36 @@
     private string LanguagesCardStyle => CardStyle(LanguagesNode);
     private string IssuesCardStyle => CardStyle(IssuesNode);
     private string ActivityCardStyle => CardStyle(ActivityNode);
+    private string ForksCardStyle => CardStyle(ForksNode);
+    private string BranchesCardStyle => CardStyle(BranchesNode);
+    private string AnnotationLayerClass => _selectedTool switch
+    {
+        PenTool => "annotation-layer-draw",
+        TextTool => "annotation-layer-text",
+        _ => string.Empty
+    };
+    private string ToolLabel => _selectedTool switch
+    {
+        PenTool => "Dibujar",
+        TextTool => "Añadir texto",
+        _ => "Mover"
+    };
     private string ProjectToLanguagesPath => ConnectionPath(ProjectNode, LanguagesNode);
     private string ProjectToIssuesPath => ConnectionPath(ProjectNode, IssuesNode);
     private string ProjectToActivityPath => ConnectionPath(ProjectNode, ActivityNode);
+    private string ProjectToForksPath => ConnectionPath(ProjectNode, ForksNode);
+    private string ProjectToBranchesPath => ConnectionPath(ProjectNode, BranchesNode);
+    private string BranchCountLabel => Project.BranchesReturned >= 100
+        ? $"{Project.Branches.Count} de 100+"
+        : Project.BranchesReturned.ToString();
+    private int UniqueCommitCount => Project.Branches
+        .SelectMany(branch => branch.Commits)
+        .Concat(Project.Commits)
+        .Select(commit => commit.Sha)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count();
+
+    private readonly record struct BoardPoint(double X, double Y);
 
     protected override void OnParametersSet()
     {
@@ -196,13 +428,62 @@
 
     private GitHubProjectData? _lastProject;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("repoCanvas.attachPointerCapture", _viewport);
+        }
+
+        if (_noteToFocusId is not null)
+        {
+            await JS.InvokeVoidAsync("repoCanvas.focus", _noteToFocusId);
+            _noteToFocusId = null;
+        }
+
+        var storageKey = AnnotationStoragePrefix + Project.Repository.FullName;
+        if (_activeAnnotationKey == storageKey)
+        {
+            return;
+        }
+
+        _activeAnnotationKey = storageKey;
+        _strokes.Clear();
+        _notes.Clear();
+        try
+        {
+            var saved = await JS.InvokeAsync<string?>("repoCanvas.loadAnnotations", storageKey);
+            if (!string.IsNullOrWhiteSpace(saved))
+            {
+                var annotations = System.Text.Json.JsonSerializer.Deserialize<CanvasAnnotations>(saved);
+                if (annotations is not null)
+                {
+                    _strokes.AddRange(annotations.Strokes);
+                    _notes.AddRange(annotations.Notes);
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _annotationError = "No se pudieron leer las anotaciones guardadas de este tablero.";
+        }
+        catch (JSException)
+        {
+            _annotationError = "El navegador no permite acceder al almacenamiento local; las anotaciones solo durarán esta sesión.";
+        }
+
+        StateHasChanged();
+    }
+
     public void ResetView()
     {
-        _positions[ProjectNode] = new(535, 90);
-        _positions[LanguagesNode] = new(120, 480);
-        _positions[IssuesNode] = new(575, 520);
-        _positions[ActivityNode] = new(1060, 450);
-        _panX = 0;
+        _positions[ProjectNode] = new(320, 40);
+        _positions[LanguagesNode] = new(70, 500);
+        _positions[IssuesNode] = new(400, 520);
+        _positions[ActivityNode] = new(875, 500);
+        _positions[ForksNode] = new(741, 35);
+        _positions[BranchesNode] = new(250, 900);
+        _panX = -140;
         _panY = 0;
     }
 
@@ -217,6 +498,32 @@
         var total = Project.Languages.Values.Sum();
         return total == 0 ? 0 : Math.Round(bytes * 100d / total);
     }
+
+    private string BranchUrl(string branchName) =>
+        $"{Project.Repository.HtmlUrl}/tree/{Uri.EscapeDataString(branchName)}";
+
+    private void ExpandPanel(string panel) => _expandedPanel = panel;
+    private void CloseExpandedPanel() => _expandedPanel = null;
+
+    private static string CommitAge(DateTimeOffset? date)
+    {
+        if (date is null)
+        {
+            return "fecha no disponible";
+        }
+
+        var elapsed = DateTimeOffset.UtcNow - date.Value;
+        return elapsed.TotalDays switch
+        {
+            < 1 => "hoy",
+            < 30 => $"hace {(int)elapsed.TotalDays} d",
+            < 365 => $"hace {(int)(elapsed.TotalDays / 30)} mes",
+            _ => $"hace {(int)(elapsed.TotalDays / 365)} a"
+        };
+    }
+
+    private static string ShortName(string value, int maxLength) =>
+        value.Length <= maxLength ? value : $"{value[..(maxLength - 1)]}…";
 
     private string ConnectionPath(string from, string to)
     {
@@ -236,6 +543,8 @@
     {
         "project" => 390,
         "activity" => 370,
+        "forks" => 500,
+        "branches" => 700,
         _ => 350
     };
 
@@ -245,11 +554,18 @@
         "languages" => 285,
         "issues" => 300,
         "activity" => 330,
+        "forks" => 370,
+        "branches" => 520,
         _ => 0
     };
 
     private void BeginPan(PointerEventArgs args)
     {
+        if (_selectedTool != SelectTool)
+        {
+            return;
+        }
+
         _isPanning = true;
         _lastPointerX = args.ClientX;
         _lastPointerY = args.ClientY;
@@ -264,6 +580,22 @@
 
     private void MovePointer(PointerEventArgs args)
     {
+        if (_activeStroke is not null)
+        {
+            var previous = _activeStroke.Points[^1];
+            var strokeDeltaX = (args.ClientX - _lastPointerX) / Zoom;
+            var strokeDeltaY = (args.ClientY - _lastPointerY) / Zoom;
+            var point = new BoardPoint(previous.X + strokeDeltaX, previous.Y + strokeDeltaY);
+            if (Math.Abs(point.X - previous.X) + Math.Abs(point.Y - previous.Y) >= 1)
+            {
+                _activeStroke.Points.Add(point);
+            }
+
+            _lastPointerX = args.ClientX;
+            _lastPointerY = args.ClientY;
+            return;
+        }
+
         var deltaX = args.ClientX - _lastPointerX;
         var deltaY = args.ClientY - _lastPointerY;
         if (_draggingNode is not null)
@@ -283,14 +615,144 @@
         _lastPointerY = args.ClientY;
     }
 
-    private void EndPointer()
+    private async Task EndPointerAsync()
     {
+        if (_activeStroke is not null)
+        {
+            _strokes.Add(_activeStroke);
+            _activeStroke = null;
+            await PersistAnnotationsAsync();
+        }
+
         _draggingNode = null;
         _isPanning = false;
+    }
+
+    private async Task BeginAnnotation(PointerEventArgs args)
+    {
+        var point = await JS.InvokeAsync<BoardPoint>(
+            "repoCanvas.worldPoint",
+            _viewport,
+            args.ClientX,
+            args.ClientY,
+            _panX,
+            _panY,
+            Zoom);
+        _lastPointerX = args.ClientX;
+        _lastPointerY = args.ClientY;
+        if (_selectedTool == PenTool)
+        {
+            _activeStroke = new CanvasStroke
+            {
+                Color = "#5947d5",
+                Points = [point]
+            };
+        }
+        else if (_selectedTool == TextTool)
+        {
+            var note = new CanvasNote
+            {
+                X = Math.Clamp(point.X, 0, 1600),
+                Y = Math.Clamp(point.Y, 0, 1370),
+                Text = string.Empty
+            };
+            _notes.Add(note);
+            _noteToFocusId = NoteInputId(note);
+            await PersistAnnotationsAsync();
+        }
+    }
+
+    private static string StrokePath(CanvasStroke stroke) =>
+        string.Join(" ", stroke.Points.Select((point, index) =>
+            $"{(index == 0 ? "M" : "L")} {point.X.ToString(System.Globalization.CultureInfo.InvariantCulture)} {point.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+
+    private static string NoteStyle(CanvasNote note) =>
+        $"left:{note.X.ToString(System.Globalization.CultureInfo.InvariantCulture)}px;top:{note.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}px;";
+
+    private static string NoteInputId(CanvasNote note) => $"canvas-note-{note.Id:N}";
+
+    private string ToolClass(string tool) => _selectedTool == tool ? "active" : string.Empty;
+
+    private void SetTool(string tool) => _selectedTool = tool;
+
+    private async Task UpdateNoteAsync(CanvasNote note, ChangeEventArgs args)
+    {
+        note.Text = args.Value?.ToString() ?? string.Empty;
+        await PersistAnnotationsAsync();
+    }
+
+    private async Task UndoAnnotationAsync()
+    {
+        if (_notes.Count > 0)
+        {
+            _notes.RemoveAt(_notes.Count - 1);
+        }
+        else if (_strokes.Count > 0)
+        {
+            _strokes.RemoveAt(_strokes.Count - 1);
+        }
+
+        await PersistAnnotationsAsync();
+    }
+
+    private async Task RemoveNoteAsync(CanvasNote note)
+    {
+        _notes.Remove(note);
+        await PersistAnnotationsAsync();
+    }
+
+    private async Task PersistAnnotationsAsync()
+    {
+        if (_activeAnnotationKey is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var data = new CanvasAnnotations
+            {
+                Strokes = _strokes.ToList(),
+                Notes = _notes.ToList()
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            await JS.InvokeVoidAsync("repoCanvas.saveAnnotations", _activeAnnotationKey, json);
+            _annotationError = null;
+        }
+        catch (JSException)
+        {
+            _annotationError = "No se pudieron guardar las anotaciones; revisa el almacenamiento del navegador.";
+        }
+    }
+
+    private sealed class CanvasAnnotations
+    {
+        public CanvasAnnotations() { }
+
+        public List<CanvasStroke> Strokes { get; set; } = [];
+        public List<CanvasNote> Notes { get; set; } = [];
+    }
+
+    private sealed class CanvasStroke
+    {
+        public CanvasStroke() { }
+
+        public Guid Id { get; init; } = Guid.NewGuid();
+        public string Color { get; init; } = "#5947d5";
+        public List<BoardPoint> Points { get; set; } = [];
+    }
+
+    private sealed class CanvasNote
+    {
+        public CanvasNote() { }
+
+        public Guid Id { get; init; } = Guid.NewGuid();
+        public double X { get; set; }
+        public double Y { get; set; }
+        public string Text { get; set; } = string.Empty;
     }
 
     private Task HandleWheel(WheelEventArgs args) =>
         ZoomChanged.InvokeAsync(Math.Clamp(Zoom + (args.DeltaY < 0 ? 0.08 : -0.08), 0.55, 1.35));
 
-    private readonly record struct BoardPoint(double X, double Y);
 }

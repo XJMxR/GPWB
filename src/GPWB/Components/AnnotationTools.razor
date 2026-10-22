@@ -1,0 +1,49 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="board-annotation-tools" @onpointerdown:stopPropagation="true" aria-label="Herramientas para anotar el tablero">
+    <button type="button" class="annotation-tool @ToolClass(SelectTool)" @onclick="() => SetTool(SelectTool)"
+            title="Mover tarjetas y lienzo" aria-label="Seleccionar y mover">↖</button>
+    <button type="button" class="annotation-tool @ToolClass(PenTool)" @onclick="() => SetTool(PenTool)"
+            title="Dibujar en el tablero" aria-label="Dibujar">✎</button>
+    <button type="button" class="annotation-tool @ToolClass(TextTool)" @onclick="() => SetTool(TextTool)"
+            title="Añadir una nota de texto" aria-label="Añadir texto">T</button>
+    <span class="annotation-tool-divider"></span>
+    <button type="button" class="annotation-tool" @onclick="OnUndo"
+            disabled="@CanUndo" title="Deshacer última anotación" aria-label="Deshacer última anotación">↶</button>
+    <span class="annotation-tool-label">@ToolLabel</span>
+</div>
+
+@code {
+    [Parameter]
+    public string SelectedTool { get; set; } = "select";
+
+    [Parameter]
+    public EventCallback<string> SelectedToolChanged { get; set; }
+
+    [Parameter]
+    public bool CanUndo { get; set; } = false;
+
+    [Parameter]
+    public EventCallback OnUndo { get; set; }
+
+    private const string SelectTool = "select";
+    private const string PenTool = "pen";
+    private const string TextTool = "text";
+
+    private async Task SetTool(string tool)
+    {
+        if (SelectedTool != tool)
+        {
+            await SelectedToolChanged.InvokeAsync(tool);
+        }
+    }
+
+    private string ToolClass(string tool) => SelectedTool == tool ? "active" : string.Empty;
+
+    private string ToolLabel => SelectedTool switch
+    {
+        PenTool => "Dibujar",
+        TextTool => "Añadir texto",
+        _ => "Mover"
+    };
+}

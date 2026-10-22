@@ -1,0 +1,21 @@
+<svg class="canvas-connectors" viewBox="0 0 1800 1500" aria-hidden="true">
+    @foreach (var connection in Connections)
+    {
+        <path d="@connection.Path" class="@connection.CssClass" />
+        <circle class="connector-dot" cx="@connection.StartX" cy="@connection.StartY" r="4" />
+        <circle class="connector-dot" cx="@connection.EndX" cy="@connection.EndY" r="4" />
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired]
+    public required IEnumerable<Connection> Connections { get; set; }
+
+    public sealed record Connection(
+        string Path,
+        double StartX,
+        double StartY,
+        double EndX,
+        double EndY,
+        string CssClass = "");
+}

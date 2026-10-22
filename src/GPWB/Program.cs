@@ -15,6 +15,7 @@ builder.Services.AddScoped(sp =>
     client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     return client;
 });
+builder.Services.AddScoped<IGitHubApiSession, GitHubApiSession>();
 builder.Services.AddScoped<IGitHubProjectService, GitHubProjectService>();
 
 await builder.Build().RunAsync();

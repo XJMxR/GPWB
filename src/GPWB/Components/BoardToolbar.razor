@@ -1,0 +1,51 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="board-toolbar" role="toolbar" aria-label="Barra de herramientas del tablero">
+    <div class="board-breadcrumb">
+        <span class="eyebrow">TABLERO</span>
+        <span class="breadcrumb-chevron" aria-hidden="true">›</span>
+        <strong>@BreadcrumbTitle</strong>
+    </div>
+    <div class="board-tools">
+        <button type="button" class="toolbar-print" @onclick="Print" title="Imprimir tablero" aria-label="Imprimir tablero">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            Imprimir
+        </button>
+        <span class="canvas-hint">Arrastra para mover · Rueda para zoom</span>
+    </div>
+    <div class="zoom-control" role="group" aria-label="Control de zoom">
+        <button type="button" @onclick="() => ZoomChanged.InvokeAsync(Math.Clamp(Zoom - 0.1, 0.55, 1.35))" aria-label="Alejar" title="Alejar (Ctrl+-)" disabled="@(Zoom <= 0.55)">−</button>
+        <span>@ZoomPercent</span>
+        <button type="button" class="fit-button" @onclick="() => ZoomChanged.InvokeAsync(1.0)" aria-label="Ajustar al 100%" title="100% (Ctrl+0)">⛶</button>
+        <span class="tool-divider" aria-hidden="true"></span>
+        <button type="button" @onclick="() => ZoomChanged.InvokeAsync(Math.Clamp(Zoom + 0.1, 0.55, 1.35))" aria-label="Acercar" title="Acercar (Ctrl++)" disabled="@(Zoom >= 1.35)">+</button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string BreadcrumbTitle { get; set; } = "RepoCanvas";
+
+    [Parameter]
+    public double Zoom { get; set; } = 1.0;
+
+    [Parameter]
+    public EventCallback<double> ZoomChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnPrint { get; set; }
+
+    private string ZoomPercent => $"{Math.Round(Zoom * 100)}%";
+
+    private async Task Print()
+    {
+        if (OnPrint.HasDelegate)
+        {
+            await OnPrint.InvokeAsync();
+        }
+    }
+}

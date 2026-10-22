@@ -1,0 +1,50 @@
+@using GPWB.Models
+
+<details class="expanded-branch" @key="Branch.Name">
+    <summary class="expanded-branch-summary">
+        <span class="branch-symbol">⑂</span>
+        <span class="expanded-branch-name">
+            @Branch.Name
+            @if (Branch.Name.Equals(DefaultBranch, StringComparison.OrdinalIgnoreCase))
+            {
+                <span class="default-branch-pill">RAMA PREDETERMINADA</span>
+            }
+            @if (Branch.Protected)
+            {
+                <span class="protected-branch">PROTEGIDA</span>
+            }
+        </span>
+        <span class="card-count">@Branch.Commits.Count commits</span>
+        <span class="branch-summary-actions">
+            <a href="@BranchUrl" target="_blank" rel="noopener noreferrer">Código ↗</a>
+            <a href="@CompareUrl" target="_blank" rel="noopener noreferrer">Comparar ↗</a>
+        </span>
+    </summary>
+    @if (Branch.Commits.Count == 0)
+    {
+        <p class="expanded-empty branch-expanded-empty">No hay commits recientes disponibles para esta rama.</p>
+    }
+    else
+    {
+        <ol class="activity-tree-commits expanded-branch-commits">
+            @foreach (var commit in Branch.Commits)
+            {
+                <CommitTreeItem Commit="commit" RepoFullName="RepoFullName" />
+            }
+        </ol>
+    }
+</details>
+
+@code {
+    [Parameter, EditorRequired]
+    public required GitHubBranchActivity Branch { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string RepoFullName { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string DefaultBranch { get; set; }
+
+    private string BranchUrl => $"{RepoFullName}/tree/{Uri.EscapeDataString(Branch.Name)}";
+    private string CompareUrl => $"{RepoFullName}/compare/{Uri.EscapeDataString(DefaultBranch)}...{Uri.EscapeDataString(Branch.Name)}";
+}
