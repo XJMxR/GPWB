@@ -1,0 +1,296 @@
+<div class="canvas-viewport"
+     @onpointerdown="BeginPan"
+     @onpointermove="MovePointer"
+     @onpointerup="EndPointer"
+     @onpointercancel="EndPointer"
+     @onpointerleave="EndPointer"
+     @onwheel="HandleWheel"
+     @onwheel:preventDefault="true">
+    <div class="canvas-world" style="@WorldStyle">
+        <svg class="canvas-connectors" viewBox="0 0 1600 1000" aria-hidden="true">
+            <path d="@ProjectToLanguagesPath" />
+            <path d="@ProjectToIssuesPath" />
+            <path d="@ProjectToActivityPath" />
+            <circle class="connector-dot" cx="@CenterX(ProjectNode)" cy="@BottomY(ProjectNode)" r="4" />
+            <circle class="connector-dot" cx="@CenterX(LanguagesNode)" cy="@TopY(LanguagesNode)" r="4" />
+            <circle class="connector-dot" cx="@CenterX(IssuesNode)" cy="@TopY(IssuesNode)" r="4" />
+            <circle class="connector-dot" cx="@CenterX(ActivityNode)" cy="@TopY(ActivityNode)" r="4" />
+        </svg>
+
+        <article class="board-card project-card"
+                 style="@ProjectCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, ProjectNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon project-icon" aria-hidden="true">GH</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">REPOSITORIO</span>
+                    <a class="card-title repo-title" href="@Project.Repository.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                        @Project.Repository.FullName <span aria-hidden="true">↗</span>
+                    </a>
+                </div>
+                <span class="card-menu" aria-hidden="true">•••</span>
+            </div>
+            <p class="project-description">@(string.IsNullOrWhiteSpace(Project.Repository.Description)
+                ? "Este repositorio no tiene descripción."
+                : Project.Repository.Description)</p>
+            <div class="repo-metrics">
+                <div class="repo-metric"><strong>★ @Project.Repository.StargazersCount.ToString("N0")</strong><span>estrellas</span></div>
+                <div class="repo-metric"><strong>⑂ @Project.Repository.ForksCount.ToString("N0")</strong><span>forks</span></div>
+                <div class="repo-metric"><strong>@Project.Repository.OpenIssuesCount.ToString("N0")</strong><span>issues + PRs</span></div>
+            </div>
+            <div class="project-meta">
+                <span><i class="language-swatch"></i>@(Project.Repository.Language ?? "Varios lenguajes")</span>
+                <span class="default-branch">⑂ @(Project.Repository.DefaultBranch ?? "rama principal")</span>
+            </div>
+        </article>
+
+        <article class="board-card languages-card"
+                 style="@LanguagesCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, LanguagesNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon languages-icon" aria-hidden="true">⌘</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">CÓDIGO</span>
+                    <h2 class="card-title">Lenguajes</h2>
+                </div>
+                <span class="card-count">@Project.Languages.Count</span>
+            </div>
+            @if (Project.Languages.Count == 0)
+            {
+                <p class="card-empty">GitHub no reporta lenguajes para este repositorio.</p>
+            }
+            else
+            {
+                <div class="language-list">
+                    @foreach (var language in Project.Languages.OrderByDescending(language => language.Value).Take(5))
+                    {
+                        <div class="language-row" @key="language.Key">
+                            <div class="language-label"><span>@language.Key</span><span>@LanguagePercentage(language.Value)%</span></div>
+                            <div class="language-track"><span style="width: @($"{LanguagePercentage(language.Value)}%")"></span></div>
+                        </div>
+                    }
+                </div>
+            }
+        </article>
+
+        <article class="board-card issues-card"
+                 style="@IssuesCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, IssuesNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon issues-icon" aria-hidden="true">◎</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">SEGUIMIENTO</span>
+                    <h2 class="card-title">Issues recientes</h2>
+                </div>
+                <span class="card-count">@Project.Issues.Count</span>
+            </div>
+            @if (Project.Issues.Count == 0)
+            {
+                <p class="card-empty">No se encontraron issues abiertos recientes.</p>
+            }
+            else
+            {
+                <ul class="item-list">
+                    @foreach (var issue in Project.Issues)
+                    {
+                        <li @key="issue.Number">
+                            <span class="issue-marker" aria-hidden="true">●</span>
+                            <a href="@issue.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                                <span>@issue.Title</span><small>#@issue.Number</small>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            }
+        </article>
+
+        <article class="board-card activity-card"
+                 style="@ActivityCardStyle"
+                 @onpointerdown="args => BeginNodeDrag(args, ActivityNode)"
+                 @onpointerdown:stopPropagation="true">
+            <div class="card-heading">
+                <span class="card-icon activity-icon" aria-hidden="true">↻</span>
+                <div class="card-heading-text">
+                    <span class="card-overline">DESARROLLO</span>
+                    <h2 class="card-title">Actividad reciente</h2>
+                </div>
+                <span class="card-count">@Project.Commits.Count</span>
+            </div>
+            @if (Project.Commits.Count == 0)
+            {
+                <p class="card-empty">No hay actividad reciente disponible.</p>
+            }
+            else
+            {
+                <ul class="item-list commit-list">
+                    @foreach (var commit in Project.Commits)
+                    {
+                        var message = commit.Commit.Message.Split('\n', 2)[0];
+                        <li @key="commit.Sha">
+                            <span class="commit-marker" aria-hidden="true"></span>
+                            <a href="@($"https://github.com/{Project.Repository.FullName}/commit/{commit.Sha}")"
+                               target="_blank" rel="noopener noreferrer">
+                                <span>@(message.Length > 72 ? $"{message[..69]}…" : message)</span>
+                                <small>@(commit.Commit.Author?.Name ?? commit.Sha[..7])</small>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            }
+        </article>
+    </div>
+
+    <div class="canvas-attribution">Información pública de GitHub · Arrastra el fondo para mover el lienzo</div>
+</div>
+
+@code {
+    private const string ProjectNode = "project";
+    private const string LanguagesNode = "languages";
+    private const string IssuesNode = "issues";
+    private const string ActivityNode = "activity";
+
+    [Parameter, EditorRequired]
+    public GitHubProjectData Project { get; set; } = default!;
+
+    [Parameter]
+    public double Zoom { get; set; }
+
+    [Parameter]
+    public EventCallback<double> ZoomChanged { get; set; }
+
+    private readonly Dictionary<string, BoardPoint> _positions = new()
+    {
+        ["project"] = new(535, 90),
+        ["languages"] = new(120, 480),
+        ["issues"] = new(575, 520),
+        ["activity"] = new(1060, 450)
+    };
+
+    private string? _draggingNode;
+    private bool _isPanning;
+    private double _lastPointerX;
+    private double _lastPointerY;
+    private double _panX;
+    private double _panY;
+
+    private string WorldStyle => $"transform: translate({_panX}px, {_panY}px) scale({Zoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)});";
+    private string ProjectCardStyle => CardStyle(ProjectNode);
+    private string LanguagesCardStyle => CardStyle(LanguagesNode);
+    private string IssuesCardStyle => CardStyle(IssuesNode);
+    private string ActivityCardStyle => CardStyle(ActivityNode);
+    private string ProjectToLanguagesPath => ConnectionPath(ProjectNode, LanguagesNode);
+    private string ProjectToIssuesPath => ConnectionPath(ProjectNode, IssuesNode);
+    private string ProjectToActivityPath => ConnectionPath(ProjectNode, ActivityNode);
+
+    protected override void OnParametersSet()
+    {
+        if (_lastProject != Project)
+        {
+            _lastProject = Project;
+            ResetView();
+        }
+    }
+
+    private GitHubProjectData? _lastProject;
+
+    public void ResetView()
+    {
+        _positions[ProjectNode] = new(535, 90);
+        _positions[LanguagesNode] = new(120, 480);
+        _positions[IssuesNode] = new(575, 520);
+        _positions[ActivityNode] = new(1060, 450);
+        _panX = 0;
+        _panY = 0;
+    }
+
+    private string CardStyle(string id)
+    {
+        var point = _positions[id];
+        return $"left: {point.X.ToString(System.Globalization.CultureInfo.InvariantCulture)}px; top: {point.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}px;";
+    }
+
+    private double LanguagePercentage(long bytes)
+    {
+        var total = Project.Languages.Values.Sum();
+        return total == 0 ? 0 : Math.Round(bytes * 100d / total);
+    }
+
+    private string ConnectionPath(string from, string to)
+    {
+        var startX = CenterX(from);
+        var startY = BottomY(from);
+        var endX = CenterX(to);
+        var endY = TopY(to);
+        var controlY = startY + (endY - startY) * 0.55;
+        return $"M {startX} {startY} C {startX} {controlY}, {endX} {controlY}, {endX} {endY}";
+    }
+
+    private double CenterX(string id) => _positions[id].X + CardWidth(id) / 2;
+    private double TopY(string id) => _positions[id].Y;
+    private double BottomY(string id) => _positions[id].Y + CardHeight(id);
+
+    private static double CardWidth(string id) => id switch
+    {
+        "project" => 390,
+        "activity" => 370,
+        _ => 350
+    };
+
+    private double CardHeight(string id) => id switch
+    {
+        "project" => 255,
+        "languages" => 285,
+        "issues" => 300,
+        "activity" => 330,
+        _ => 0
+    };
+
+    private void BeginPan(PointerEventArgs args)
+    {
+        _isPanning = true;
+        _lastPointerX = args.ClientX;
+        _lastPointerY = args.ClientY;
+    }
+
+    private void BeginNodeDrag(PointerEventArgs args, string id)
+    {
+        _draggingNode = id;
+        _lastPointerX = args.ClientX;
+        _lastPointerY = args.ClientY;
+    }
+
+    private void MovePointer(PointerEventArgs args)
+    {
+        var deltaX = args.ClientX - _lastPointerX;
+        var deltaY = args.ClientY - _lastPointerY;
+        if (_draggingNode is not null)
+        {
+            var point = _positions[_draggingNode];
+            _positions[_draggingNode] = new(
+                Math.Max(0, point.X + deltaX / Zoom),
+                Math.Max(0, point.Y + deltaY / Zoom));
+        }
+        else if (_isPanning)
+        {
+            _panX += deltaX;
+            _panY += deltaY;
+        }
+
+        _lastPointerX = args.ClientX;
+        _lastPointerY = args.ClientY;
+    }
+
+    private void EndPointer()
+    {
+        _draggingNode = null;
+        _isPanning = false;
+    }
+
+    private Task HandleWheel(WheelEventArgs args) =>
+        ZoomChanged.InvokeAsync(Math.Clamp(Zoom + (args.DeltaY < 0 ? 0.08 : -0.08), 0.55, 1.35));
+
+    private readonly record struct BoardPoint(double X, double Y);
+}

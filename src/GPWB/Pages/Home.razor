@@ -1,0 +1,199 @@
+﻿@page "/"
+@using System.Net
+@using System.Text.RegularExpressions
+@inject IGitHubProjectService ProjectService
+
+<PageTitle>RepoCanvas — @(_project?.Repository.FullName ?? "tablero de GitHub")</PageTitle>
+
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="./" aria-label="RepoCanvas, inicio">
+            <span class="brand-mark" aria-hidden="true">R</span>
+            <span>repo<span class="brand-accent">canvas</span></span>
+        </a>
+        <div class="topbar-divider"></div>
+        <div class="document-title">
+            <span class="document-kicker">TABLERO DE PROYECTO</span>
+            <strong>@(_project?.Repository.FullName ?? "Nuevo tablero")</strong>
+        </div>
+        <div class="topbar-actions">
+            @if (_project is not null)
+            {
+                <a class="github-link" href="@_project.Repository.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                    <span aria-hidden="true">↗</span> Ver en GitHub
+                </a>
+            }
+            <span class="save-indicator"><span></span> Solo lectura</span>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <aside class="sidebar">
+            <div class="sidebar-heading">
+                <div>
+                    <span class="eyebrow">FUENTE DE DATOS</span>
+                    <h1>Proyecto GitHub</h1>
+                </div>
+                <span class="source-icon" aria-hidden="true">GH</span>
+            </div>
+            <p class="sidebar-copy">Conecta un repositorio público para crear un tablero visual con sus datos.</p>
+
+            <form class="repo-form" @onsubmit="LoadProjectAsync" @onsubmit:preventDefault>
+                <label for="repository">Propietario / repositorio</label>
+                <div class="input-wrap">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="repository" @bind="_repositoryInput" placeholder="dotnet / aspnetcore" autocomplete="off" />
+                </div>
+                <button class="primary-button" type="submit" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="button-spinner" aria-hidden="true"></span>
+                        <span>Conectando…</span>
+                    }
+                    else
+                    {
+                        <span aria-hidden="true">＋</span>
+                        <span>Generar tablero</span>
+                    }
+                </button>
+            </form>
+
+            @if (_error is not null)
+            {
+                <div class="error-message" role="alert">@_error</div>
+            }
+
+            @if (_project is not null)
+            {
+                <div class="sidebar-section">
+                    <span class="eyebrow">EN ESTE TABLERO</span>
+                    <div class="layer-list">
+                        <div class="layer-item"><span class="layer-dot project-dot"></span>Repositorio</div>
+                        <div class="layer-item"><span class="layer-dot language-dot"></span>Lenguajes</div>
+                        <div class="layer-item"><span class="layer-dot issue-dot"></span>Issues abiertos</div>
+                        <div class="layer-item"><span class="layer-dot activity-dot"></span>Actividad reciente</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section repo-summary">
+                    <span class="eyebrow">RESUMEN</span>
+                    <div class="summary-line"><span>Estrellas</span><strong>★ @_project.Repository.StargazersCount.ToString("N0")</strong></div>
+                    <div class="summary-line"><span>Forks</span><strong>⑂ @_project.Repository.ForksCount.ToString("N0")</strong></div>
+                    <div class="summary-line"><span>Issues + PRs</span><strong>@_project.Repository.OpenIssuesCount.ToString("N0")</strong></div>
+                </div>
+            }
+
+            <div class="sidebar-footer">
+                <span class="status-dot"></span>
+                <span>Los datos se obtienen directamente de GitHub</span>
+            </div>
+        </aside>
+
+        <main class="board-area">
+            <div class="board-toolbar">
+                <div class="board-breadcrumb">
+                    <span>Mis tableros</span><span class="breadcrumb-chevron">›</span>
+                    <strong>@(_project?.Repository.Name ?? "Lienzo")</strong>
+                </div>
+                <div class="board-tools">
+                    <span class="canvas-hint">Arrastra las tarjetas para organizarlas</span>
+                    <div class="zoom-control" aria-label="Controles de zoom">
+                        <button type="button" @onclick="ZoomOut" aria-label="Alejar">−</button>
+                        <span>@(_zoom * 100)%</span>
+                        <button type="button" @onclick="ZoomIn" aria-label="Acercar">＋</button>
+                        <span class="tool-divider"></span>
+                        <button type="button" class="fit-button" @onclick="ResetView" aria-label="Restablecer vista">⤢</button>
+                    </div>
+                </div>
+            </div>
+
+            @if (_project is not null)
+            {
+                <CanvasBoard @ref="_canvasBoard" Project="_project" Zoom="_zoom" ZoomChanged="SetZoom" />
+            }
+            else if (!_isLoading)
+            {
+                <div class="empty-canvas">
+                    <div class="empty-illustration" aria-hidden="true">
+                        <div class="empty-card empty-card-left"></div>
+                        <div class="empty-card empty-card-main"><span></span><span></span><span></span></div>
+                        <div class="empty-card empty-card-right"></div>
+                        <div class="empty-connector"></div>
+                    </div>
+                    <span class="eyebrow">TU ESPACIO DE TRABAJO</span>
+                    <h2>Las ideas de tu proyecto, en un solo lugar</h2>
+                    <p>Escribe <strong>usuario/repositorio</strong> para convertir los datos de GitHub en un tablero interactivo.</p>
+                    <button class="primary-button empty-action" type="button" @onclick="LoadProjectAsync">Probar con dotnet/aspnetcore</button>
+                </div>
+            }
+            else
+            {
+                <div class="loading-canvas" role="status">
+                    <span class="large-spinner" aria-hidden="true"></span>
+                    <strong>Preparando tu tablero…</strong>
+                    <span>Consultando la información pública del repositorio</span>
+                </div>
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private const double DefaultZoom = 0.68;
+
+    private static readonly Regex RepositoryPattern = new(
+        @"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private string _repositoryInput = "dotnet/aspnetcore";
+    private GitHubProjectData? _project;
+    private CanvasBoard? _canvasBoard;
+    private string? _error;
+    private bool _isLoading;
+    private double _zoom = DefaultZoom;
+
+    protected override async Task OnInitializedAsync() => await LoadProjectAsync();
+
+    private async Task LoadProjectAsync()
+    {
+        var repository = _repositoryInput.Trim();
+        if (!RepositoryPattern.IsMatch(repository))
+        {
+            _error = "Escribe el repositorio con el formato usuario/repositorio.";
+            return;
+        }
+
+        var segments = repository.Split('/');
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _project = await ProjectService.GetProjectAsync(segments[0], segments[1]);
+            _zoom = DefaultZoom;
+        }
+        catch (HttpRequestException exception)
+        {
+            _project = null;
+            _error = exception.StatusCode switch
+            {
+                HttpStatusCode.NotFound => "No se encontró el repositorio. Comprueba el nombre y que sea público.",
+                HttpStatusCode.Forbidden => "GitHub limitó las consultas anónimas. Espera un momento y vuelve a intentarlo.",
+                _ => $"No se pudo cargar el repositorio: {exception.Message}"
+            };
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ZoomIn() => SetZoom(Math.Min(1.35, _zoom + 0.1));
+    private void ZoomOut() => SetZoom(Math.Max(0.55, _zoom - 0.1));
+    private void ResetView()
+    {
+        SetZoom(DefaultZoom);
+        _canvasBoard?.ResetView();
+    }
+    private void SetZoom(double value) => _zoom = Math.Clamp(value, 0.55, 1.35);
+}
