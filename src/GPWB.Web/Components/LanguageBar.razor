@@ -1,0 +1,30 @@
+@using GPWB.Core.Models
+
+<div class="language-list">
+    @foreach (var language in Languages.OrderByDescending(l => l.Value).Take(MaxItems))
+    {
+        <div class="language-row" @key="language.Key">
+            <div class="language-label">
+                <span>@language.Key</span>
+                <span>@GetPercentage(language.Value)%</span>
+            </div>
+            <div class="language-track">
+                <span style="width: @($"{GetPercentage(language.Value)}%")"></span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyDictionary<string, long> Languages { get; set; }
+
+    [Parameter]
+    public int MaxItems { get; set; } = 5;
+
+    private double GetPercentage(long bytes)
+    {
+        var total = Languages.Values.Sum();
+        return total == 0 ? 0 : Math.Round(bytes * 100d / total);
+    }
+}

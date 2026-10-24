@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GPWB.Application/GPWB.Application.csproj" />
+    <Project Path="src/GPWB.Core/GPWB.Core.csproj" />
+    <Project Path="src/GPWB.Infrastructure/GPWB.Infrastructure.csproj" />
+    <Project Path="src/GPWB.Shared/GPWB.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/GPWB.Web/">
+    <Project Path="src/GPWB.Web/GPWB.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,16 @@
+<Project>
+  <ItemGroup>
+    <!-- Core packages -->
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    
+    <!-- Blazor/Web -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.13" />
+    
+    <!-- JSON/HTTP -->
+    <PackageVersion Include="System.Net.Http.Json" Version="9.0.0" />
+    <PackageVersion Include="System.Text.Json" Version="9.0.0" />
+  </ItemGroup>
+</Project>

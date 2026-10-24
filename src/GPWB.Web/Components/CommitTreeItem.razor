@@ -1,0 +1,51 @@
+@using GPWB.Core.Models
+
+<li class="activity-tree-commit" @key="Commit.Sha">
+    <span class="activity-tree-node" aria-hidden="true"></span>
+    <a href="@CommitUrl" target="_blank" rel="noopener noreferrer" class="activity-tree-commit-content">
+        <span class="activity-commit-message">@TruncatedMessage</span>
+        <small>@AuthorName · @CommitAge · <code>@ShortSha</code></small>
+        @if (ShowParents && Commit.Parents.Count > 0)
+        {
+            <span class="activity-commit-parents">
+                @foreach (var parent in Commit.Parents)
+                {
+                    <a href="@($"https://github.com/{RepoFullName}/commit/{parent.Sha}")" 
+                       target="_blank" rel="noopener noreferrer">@parent.Sha[..7]</a>
+                }
+            </span>
+        }
+    </a>
+</li>
+
+@code {
+    [Parameter, EditorRequired]
+    public required GitHubCommit Commit { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string RepoFullName { get; set; }
+
+    [Parameter]
+    public bool ShowParents { get; set; } = true;
+
+    private string CommitUrl => $"https://github.com/{RepoFullName}/commit/{Commit.Sha}";
+    private string TruncatedMessage => Commit.Commit.Message.Split('\n', 2)[0].Length > 55 
+        ? Commit.Commit.Message.Split('\n', 2)[0][..54] + "…" 
+        : Commit.Commit.Message.Split('\n', 2)[0];
+    private string AuthorName => Commit.Commit.Author?.Name ?? Commit.Sha[..7];
+    private string ShortSha => Commit.Sha[..7];
+    private string CommitAge => GetCommitAge(Commit.Commit.Author?.Date);
+
+    private static string GetCommitAge(DateTimeOffset? date)
+    {
+        if (date is null) return "fecha no disponible";
+        var elapsed = DateTimeOffset.UtcNow - date.Value;
+        return elapsed.TotalDays switch
+        {
+            < 1 => "hoy",
+            < 30 => $"hace {(int)elapsed.TotalDays} d",
+            < 365 => $"hace {(int)(elapsed.TotalDays / 30)} mes",
+            _ => $"hace {(int)(elapsed.TotalDays / 365)} a"
+        };
+    }
+}

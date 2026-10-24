@@ -1,0 +1,142 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="sidebar">
+    <div class="sidebar-heading">
+        <h1>RepoCanvas</h1>
+        <div class="source-icon" aria-hidden="true">GH</div>
+    </div>
+    <p class="sidebar-copy">
+        Crea un tablero visual a partir de un repositorio público de GitHub.
+        Arrastra las tarjetas, haz zoom y añade anotaciones.
+    </p>
+    <form class="repo-form" @onsubmit="HandleSubmit">
+        <label for="repo-input">Repositorio (usuario/repositorio)</label>
+        <div class="input-wrap">
+            <span aria-hidden="true">github.com/</span>
+            <input id="repo-input" type="text" @bind="RepoInput" placeholder="usuario/repositorio" @bind:event="oninput" autocomplete="off" aria-describedby="repo-help" />
+        </div>
+        <span id="repo-help" class="sidebar-copy">Formato: <code>torvalds/linux</code> o <code>microsoft/vscode</code></span>
+        <button type="submit" class="primary-button" disabled="@IsLoading">
+            @if (IsLoading)
+            {
+                <span class="button-spinner" aria-hidden="true"></span>
+                <text>Cargando...</text>
+            }
+            else
+            {
+                <span>Crear tablero</span>
+            }
+        </button>
+    </form>
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <ErrorMessage Message="@ErrorMessage" />
+    }
+    @if (Project is not null)
+    {
+        <div class="sidebar-section">
+            <div class="sidebar-heading">
+                <h2>Capas del tablero</h2>
+            </div>
+            <div class="layer-list" role="list" aria-label="Capas del tablero">
+                @foreach (var layer in GetLayerItems())
+                {
+                    <div class="layer-item" role="listitem">
+                        <span class="layer-dot @layer.DotClass" aria-hidden="true"></span>
+                        @layer.Label
+                        <span style="margin-left: auto;">@layer.Count</span>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="repo-summary">
+            <div class="summary-line">
+                <span>Commits únicos</span>
+                <strong>@UniqueCommitCount</strong>
+            </div>
+            <div class="summary-line">
+                <span>Forks totales</span>
+                <strong>@Project.Repository.ForksCount.ToString("N0")</strong>
+            </div>
+            <div class="summary-line">
+                <span>Ramas consultadas</span>
+                <strong>@Project.BranchesReturned</strong>
+            </div>
+        </div>
+    }
+    <div class="sidebar-footer">
+        <span class="status-dot @(IsAuthenticated ? "connected" : "")" aria-hidden="true"></span>
+        <span>
+            @if (IsAuthenticated)
+            {
+                <text>Conectado como @Login</text>
+            }
+            else
+            {
+                <text>Modo anónimo · @AnonymousRequests consultas</text>
+            }
+        </span>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string RepoInput { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> RepoInputChanged { get; set; }
+
+    [Parameter]
+    public GitHubProjectData? Project { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; } = false;
+
+    [Parameter]
+    public string ErrorMessage { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsAuthenticated { get; set; } = false;
+
+    [Parameter]
+    public string Login { get; set; } = string.Empty;
+
+    [Parameter]
+    public int AnonymousRequests { get; set; } = 0;
+
+    [Parameter]
+    public EventCallback<string> OnSubmit { get; set; }
+
+    private int UniqueCommitCount => Project?.Branches
+        .SelectMany(branch => branch.Commits)
+        .Concat(Project.Commits)
+        .Select(commit => commit.Sha)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count() ?? 0;
+
+    private IReadOnlyList<(string Label, int Count, string DotClass)> GetLayerItems()
+    {
+        if (Project is null)
+        {
+            return Array.Empty<(string Label, int Count, string DotClass)>();
+        }
+
+        return new[]
+        {
+            ("Repositorio", 1, "project-dot"),
+            ("Lenguajes", Project.Languages.Count, "language-dot"),
+            ("Issues", Project.Issues.Count, "issue-dot"),
+            ("Actividad", Project.Commits.Count, "activity-dot"),
+            ("Forks", Project.Forks.Count, "forks-dot"),
+            ("Ramas", Project.Branches.Count, "branches-dot")
+        };
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (!string.IsNullOrWhiteSpace(RepoInput) && OnSubmit.HasDelegate)
+        {
+            await OnSubmit.InvokeAsync(RepoInput.Trim());
+        }
+    }
+}
